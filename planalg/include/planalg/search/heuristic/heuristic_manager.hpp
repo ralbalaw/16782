@@ -1,6 +1,8 @@
 #pragma once
 
-#include <chrono>
+#include <memory>
+
+#include "planalg/search/time_limit.hpp"
 
 namespace planalg::search::heuristic
 {
@@ -12,7 +14,7 @@ public:
 
   virtual double computeOrLookupHeuristic(const State& state) = 0;
   virtual void updateHeuristicValue(const State& state, double value) = 0;
-  virtual void learn(const State& state, std::chrono::milliseconds max_duration) = 0;
+  virtual void learn(const State& state, const TimeLimit& time_limit) = 0;
   virtual bool finishedLearning(const State& state) = 0;
 };
 template <typename State>

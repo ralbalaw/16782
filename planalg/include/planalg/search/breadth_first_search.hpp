@@ -6,6 +6,7 @@
 #include "planalg/search/types.hpp"
 #include "planalg/search/concepts.hpp"
 #include "planalg/search/path.hpp"
+#include "planalg/search/time_limit.hpp"
 
 namespace planalg
 {
@@ -26,7 +27,8 @@ PathUPtr<State> breadthFirstSearch(BfsSearchData<State>& search_data, IsGoal is_
 
   std::size_t expanded = 0;
 
-  while (!open_queue.empty() && (!max_expansions || expanded < *max_expansions))
+  while (!open_queue.empty() && (!max_expansions || expanded < *max_expansions) &&
+         !stop_condition())
   {
     const State state = std::move(open_queue.front());
     open_queue.pop();
@@ -51,14 +53,20 @@ PathUPtr<State> breadthFirstSearch(BfsSearchData<State>& search_data, IsGoal is_
     });
 
     ++expanded;
-
-    if (stop_condition())
-    {
-      break;
-    }
   }
 
   return nullptr;
+}
+
+template <typename State, typename ForEachSuccessor, typename IsGoal>
+  requires SuccessorProvider<ForEachSuccessor, State> && GoalTestProvider<IsGoal, State>
+PathUPtr<State>
+breadthFirstSearch(BfsSearchData<State>& search_data, IsGoal is_goal,
+                   ForEachSuccessor for_each_successor, const TimeLimit& time_limit,
+                   std::optional<std::size_t> max_expansions = std::nullopt)
+{
+  return breadthFirstSearch(search_data, is_goal, for_each_successor,
+                            time_limit.stopCondition(), max_expansions);
 }
 
 template <typename State, typename ForEachSuccessor, typename IsGoal>
@@ -69,19 +77,8 @@ breadthFirstSearch(BfsSearchData<State>& search_data, IsGoal is_goal,
                    const std::optional<std::chrono::milliseconds>& max_duration = std::nullopt,
                    std::optional<std::size_t> max_expansions = std::nullopt)
 {
-  using Clock = std::chrono::steady_clock;
-
-  if (max_duration)
-  {
-    const auto deadline = Clock::now() + *max_duration;
-
-    return breadthFirstSearch(
-        search_data, is_goal, for_each_successor, [deadline]() { return Clock::now() >= deadline; },
-        max_expansions);
-  }
-
-  return breadthFirstSearch(
-      search_data, is_goal, for_each_successor, []() { return false; }, max_expansions);
+  return breadthFirstSearch(search_data, is_goal, for_each_successor,
+                            TimeLimit{ max_duration }, max_expansions);
 }
 
 template <typename State, typename ForEachSuccessor, typename ComputeStepCost, typename IsGoal>

@@ -35,7 +35,7 @@ private:
   double computeOrLookupHeuristic(const State& state) override
   { return this->heuristicManager()->computeOrLookupHeuristic(state); }
 
-  void learnHeuristic(std::chrono::milliseconds time_limit) override
+  void learnHeuristic(const TimeLimit& time_limit) override
   {
     const auto& closed_set = this->closedSet();
     if (closed_set.empty())
@@ -62,6 +62,11 @@ private:
 
     for (const State& state : closed_set)
     {
+      if (time_limit.expired())
+      {
+        return;
+      }
+
       const double g = g_value_map.at(state);
       const double h = f_min - g;
       this->heuristicManager()->updateHeuristicValue(state, h);
@@ -69,7 +74,7 @@ private:
   }
 
   void performAdditionalLearning(const State& current_state,
-                                 std::chrono::milliseconds time_limit) override
+                                 const TimeLimit& time_limit) override
   { this->heuristicManager()->learn(current_state, time_limit); }
 
   double heuristic_weight = 1.0;

@@ -62,10 +62,8 @@ public:
   void updateHeuristicValue(const State& state, double value) override
   { geometric_lower_bound_.insert_or_assign(state, value); }
 
-  void learn(const State& state, std::chrono::milliseconds max_duration) override
+  void learn(const State& state, const TimeLimit& time_limit) override
   {
-    const auto start_time = std::chrono::steady_clock::now();
-
     if (!shouldContinueLearningDeparture(state.t))
     {
       departure_search_data_.open_queue = {};
@@ -73,22 +71,17 @@ public:
 
     if (!departure_search_data_.open_queue.empty())
     {
-      backwardDepartureLearning(max_duration);
+      backwardDepartureLearning(time_limit);
 
-      const auto end_time = std::chrono::steady_clock::now();
-      const auto elapsed_time =
-          std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
-      if (elapsed_time >= max_duration)
+      if (time_limit.expired())
       {
         return;
       }
-      max_duration -= elapsed_time;
     }
 
     if (!spatial_search_data_.open_queue.empty())
     {
-      backwardSpatialCostLearning(max_duration);
+      backwardSpatialCostLearning(time_limit);
     }
   }
 
@@ -106,7 +99,7 @@ public:
   bool shouldContinueLearningSpatial() const
   { return !spatial_search_data_.open_queue.empty(); }
 
-  void backwardSpatialCostLearning(const std::chrono::milliseconds& max_duration)
+  void backwardSpatialCostLearning(const TimeLimit& time_limit)
   {
     auto is_goal = [](int) { return false; };
 
@@ -120,10 +113,10 @@ public:
     };
 
     auto backward_path = dijkstraSearch(spatial_search_data_, is_goal, neighbor_callback,
-                                        compute_backward_step_cost, max_duration);
+                                        compute_backward_step_cost, time_limit);
   }
 
-  void backwardDepartureLearning(const std::chrono::milliseconds& max_duration)
+  void backwardDepartureLearning(const TimeLimit& time_limit)
   {
     auto is_goal = [](int) { return false; };
 
@@ -135,7 +128,7 @@ public:
     auto compute_step_cost = [](const int&, const int&) -> double { return 1.0; };
 
     dijkstraSearch(departure_search_data_, is_goal, neighbor_callback, compute_step_cost,
-                   max_duration);
+                   time_limit);
   }
 
 private:

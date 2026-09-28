@@ -39,15 +39,18 @@ private:
   double computeOrLookupHeuristic(const State& state) override
   { return this->heuristicManager()->computeOrLookupHeuristic(state); }
 
-  void learnHeuristic() override
+  void learnHeuristic(const TimeLimit& time_limit) override
   {
     if (this->closedSet().empty())
     {
       return;
     }
     initializeBackwardSearch();
-    runBackwardSearch();
-    applyHeuristicUpdates();
+    runBackwardSearch(time_limit);
+    if (!time_limit.expired())
+    {
+      applyHeuristicUpdates(time_limit);
+    }
 
     backward_search_data_.clear();
   }
@@ -85,7 +88,7 @@ private:
     backward_search_data_.open_queue = OpenQueue<State>(CompareOpenEntry<State>{}, std::move(seeds));
   }
 
-  void runBackwardSearch()
+  void runBackwardSearch(const TimeLimit& time_limit)
   {
     auto is_goal = [](const State&) { return false; };
 
@@ -102,15 +105,21 @@ private:
       return this->computeStepCost()(predecessor, state);
     };
 
-    dijkstraSearch(backward_search_data_, is_goal, predecessor_callback, backward_cost);
+    dijkstraSearch(backward_search_data_, is_goal, predecessor_callback, backward_cost,
+                   time_limit);
   }
 
-  void applyHeuristicUpdates()
+  void applyHeuristicUpdates(const TimeLimit& time_limit)
   {
     const auto& g_value_map = backward_search_data_.g_value_map;
 
     for (const State& state : this->closedSet())
     {
+      if (time_limit.expired())
+      {
+        return;
+      }
+
       const auto it = g_value_map.find(state);
 
       const double h =

@@ -8,6 +8,7 @@
 #include "planalg/search/types.hpp"
 #include "planalg/search/concepts.hpp"
 #include "planalg/search/path.hpp"
+#include "planalg/search/time_limit.hpp"
 
 namespace planalg
 {
@@ -30,7 +31,8 @@ PathUPtr<State> dijkstraSearch(SearchData<State>& search_data, IsGoal is_goal,
   int order_count = 0;
   std::size_t expanded = 0;
 
-  while (!open_queue.empty() && (!max_expansions || expanded < *max_expansions))
+  while (!open_queue.empty() && (!max_expansions || expanded < *max_expansions) &&
+         !stop_condition())
   {
     const auto [state_g, _, state] = open_queue.top();
     open_queue.pop();
@@ -71,14 +73,22 @@ PathUPtr<State> dijkstraSearch(SearchData<State>& search_data, IsGoal is_goal,
 
       open_queue.emplace(successor_g, ++order_count, std::move(successor));
     });
-
-    if (stop_condition())
-    {
-      break;
-    }
   }
 
   return nullptr;
+}
+
+template <typename State, typename ForEachSuccessor, typename ComputeStepCost, typename IsGoal>
+  requires SuccessorProvider<ForEachSuccessor, State> && StepCostProvider<ComputeStepCost, State> &&
+           GoalTestProvider<IsGoal, State>
+PathUPtr<State>
+dijkstraSearch(SearchData<State>& search_data, IsGoal is_goal,
+               ForEachSuccessor for_each_successor, ComputeStepCost compute_step_cost,
+               const TimeLimit& time_limit,
+               std::optional<std::size_t> max_expansions = std::nullopt)
+{
+  return dijkstraSearch(search_data, is_goal, for_each_successor, compute_step_cost,
+                        time_limit.stopCondition(), max_expansions);
 }
 
 template <typename State, typename ForEachSuccessor, typename ComputeStepCost, typename IsGoal>
@@ -90,20 +100,8 @@ dijkstraSearch(SearchData<State>& search_data, IsGoal is_goal, ForEachSuccessor 
                const std::optional<std::chrono::milliseconds>& max_duration = std::nullopt,
                std::optional<std::size_t> max_expansions = std::nullopt)
 {
-  using Clock = std::chrono::steady_clock;
-
-  if (max_duration)
-  {
-    const auto deadline = Clock::now() + *max_duration;
-
-    return dijkstraSearch(
-        search_data, is_goal, for_each_successor, compute_step_cost,
-        [deadline]() { return Clock::now() >= deadline; }, max_expansions);
-  }
-
-  return dijkstraSearch(
-      search_data, is_goal, for_each_successor, compute_step_cost, []() { return false; },
-      max_expansions);
+  return dijkstraSearch(search_data, is_goal, for_each_successor, compute_step_cost,
+                        TimeLimit{ max_duration }, max_expansions);
 }
 
 template <typename State, typename ForEachSuccessor, typename ComputeStepCost, typename IsGoal>

@@ -9,6 +9,7 @@
 #include "planalg/search/types.hpp"
 #include "planalg/search/concepts.hpp"
 #include "planalg/search/path.hpp"
+#include "planalg/search/time_limit.hpp"
 #include "planalg/search/utility.hpp"
 
 
@@ -39,7 +40,8 @@ aStarSearch(SearchData<State>& search_data, IsGoal is_goal,
 
   int order_count = 0;
   std::size_t expanded = 0;
-  while (!open_queue.empty() && (!max_expansions || expanded < *max_expansions))
+  while (!open_queue.empty() && (!max_expansions || expanded < *max_expansions) &&
+         !stop_condition())
   {
     const auto [state_f, _, state] = open_queue.top();
     open_queue.pop();
@@ -89,11 +91,6 @@ aStarSearch(SearchData<State>& search_data, IsGoal is_goal,
 
       open_queue.emplace(successor_f, ++order_count, std::move(successor));
     });
-
-    if (stop_condition())
-    {
-      break;
-    }
   }
 
   while (!open_queue.empty() && closed_set.contains(open_queue.top().state))
@@ -111,24 +108,29 @@ template <typename State, typename ForEachSuccessor, typename ComputeStepCost,
 PathUPtr<State>
 aStarSearch(SearchData<State>& search_data, IsGoal is_goal,
             ForEachSuccessor for_each_successor, ComputeStepCost compute_step_cost,
+            ComputeStateHeuristic compute_heuristic, double heuristic_weight,
+            const TimeLimit& time_limit,
+            std::optional<std::size_t> max_expansions = std::nullopt)
+{
+  return aStarSearch(search_data, is_goal, for_each_successor, compute_step_cost,
+                     compute_heuristic, time_limit.stopCondition(), heuristic_weight,
+                     max_expansions);
+}
+
+template <typename State, typename ForEachSuccessor, typename ComputeStepCost,
+          typename ComputeStateHeuristic, typename IsGoal>
+  requires SuccessorProvider<ForEachSuccessor, State> && StepCostProvider<ComputeStepCost, State> &&
+           StateHeuristicProvider<ComputeStateHeuristic, State> && GoalTestProvider<IsGoal, State>
+PathUPtr<State>
+aStarSearch(SearchData<State>& search_data, IsGoal is_goal,
+            ForEachSuccessor for_each_successor, ComputeStepCost compute_step_cost,
             ComputeStateHeuristic compute_heuristic, double heuristic_weight = 1.0,
             const std::optional<std::chrono::milliseconds>& max_duration = std::nullopt,
             std::optional<std::size_t> max_expansions = std::nullopt)
 {
-  using Clock = std::chrono::steady_clock;
-
-  if (max_duration)
-  {
-    const auto deadline = Clock::now() + *max_duration;
-
-    return aStarSearch(
-        search_data, is_goal, for_each_successor, compute_step_cost, compute_heuristic,
-        [deadline]() { return Clock::now() >= deadline; }, heuristic_weight, max_expansions);
-  }
-
-  return aStarSearch(
-      search_data, is_goal, for_each_successor, compute_step_cost, compute_heuristic,
-      []() { return false; }, heuristic_weight, max_expansions);
+  return aStarSearch(search_data, is_goal, for_each_successor, compute_step_cost,
+                     compute_heuristic, heuristic_weight, TimeLimit{ max_duration },
+                     max_expansions);
 }
 
 template <typename State, typename ForEachSuccessor, typename ComputeStepCost,

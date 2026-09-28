@@ -9,6 +9,7 @@
 #include "planalg/search/concepts.hpp"
 #include "planalg/search/path.hpp"
 #include "planalg/search/a_star_search.hpp"
+#include "planalg/search/time_limit.hpp"
 #include "planalg/search/heuristic/heuristic_manager.hpp"
 
 namespace planalg
@@ -48,7 +49,7 @@ public:
                      std::optional<std::chrono::milliseconds> time_limit = std::nullopt,
                      std::optional<std::size_t> step_max_expansions = std::nullopt)
   {
-    auto start_time = std::chrono::steady_clock::now();
+    const TimeLimit planning_time_limit{ time_limit };
 
     if (!step_max_expansions)
     {
@@ -62,32 +63,20 @@ public:
 
     if (time_limit)
     {
-      performAdditionalLearning(current_state, *time_limit * 3 / 4);
-      const auto end_time = std::chrono::steady_clock::now();
-      const auto remaining_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-          *time_limit - (end_time - start_time));
-      *time_limit = remaining_time;
-      start_time = std::chrono::steady_clock::now();
+      performAdditionalLearning(current_state, planning_time_limit.portion(3, 4));
     }
 
     search_data.clear();
-    current_path = performLookaheadSearch(current_state, step_max_expansions, time_limit);
+    current_path =
+        performLookaheadSearch(current_state, step_max_expansions, planning_time_limit);
 
-    auto end_time = std::chrono::steady_clock::now();
-
-    learnHeuristic();
+    learnHeuristic(planning_time_limit);
 
     const State next_state = chooseNextState(current_state);
 
-    if (time_limit)
+    if (time_limit && !planning_time_limit.expired())
     {
-      end_time = std::chrono::steady_clock::now();
-      const auto remaining_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-          *time_limit - (end_time - start_time));
-      if (remaining_time.count() > 0)
-      {
-        performAdditionalLearning(current_state, remaining_time);
-      }
+      performAdditionalLearning(current_state, planning_time_limit);
     }
 
     return next_state;
@@ -96,16 +85,15 @@ public:
 protected:
   virtual PathUPtr<State>
   performLookaheadSearch(const State& current_state,
-                         std::optional<std::size_t> max_expansions = std::nullopt,
-                         std::optional<std::chrono::milliseconds> time_limit = std::nullopt)
+                         std::optional<std::size_t> max_expansions,
+                         const TimeLimit& time_limit)
   {
     initializeSearchData(current_state, search_data);
     return aStarSearch(search_data, is_goal_, for_each_successor_, compute_step_cost_,
                        heuristicEvaluator(), heuristic_weight_, time_limit, max_expansions);
   }
 
-  virtual void performAdditionalLearning(const State& current_state,
-                                         std::chrono::milliseconds time_limit)
+  virtual void performAdditionalLearning(const State&, const TimeLimit&)
   {
   }
 
@@ -123,7 +111,7 @@ protected:
     return h;
   }
 
-  virtual void learnHeuristic(std::chrono::milliseconds time_limit)
+  virtual void learnHeuristic(const TimeLimit&)
   {
   }
 
