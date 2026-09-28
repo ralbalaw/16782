@@ -16,10 +16,10 @@ public:
   {
   }
 
-  [[nodiscard]] bool expired() const
+  bool expired() const
   { return Clock::now() >= deadline_; }
 
-  [[nodiscard]] TimeLimit portion(int numerator, int denominator) const
+  TimeLimit portion(int numerator, int denominator) const
   {
     if (deadline_ == Clock::time_point::max())
     {
@@ -31,14 +31,13 @@ public:
     return TimeLimit{ now + remaining * numerator / denominator };
   }
 
-  [[nodiscard]] auto stopCondition() const
+  auto stopCondition() const
   {
     return [deadline = deadline_]() { return Clock::now() >= deadline; };
   }
 
 private:
-  explicit TimeLimit(Clock::time_point deadline)
-    : deadline_(deadline)
+  explicit TimeLimit(Clock::time_point deadline) : deadline_(deadline)
   {
   }
 
