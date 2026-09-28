@@ -63,12 +63,11 @@ public:
 
     if (time_limit)
     {
-      performAdditionalLearning(current_state, planning_time_limit.portion(3, 4));
+      performAdditionalLearning(current_state, planning_time_limit.portion(0.75));
     }
 
     search_data.clear();
-    current_path =
-        performLookaheadSearch(current_state, step_max_expansions, planning_time_limit);
+    current_path = performLookaheadSearch(current_state, step_max_expansions, planning_time_limit);
 
     learnHeuristic(planning_time_limit);
 
@@ -83,10 +82,9 @@ public:
   }
 
 protected:
-  virtual PathUPtr<State>
-  performLookaheadSearch(const State& current_state,
-                         std::optional<std::size_t> max_expansions,
-                         const TimeLimit& time_limit)
+  virtual PathUPtr<State> performLookaheadSearch(const State& current_state,
+                                                 std::optional<std::size_t> max_expansions,
+                                                 const TimeLimit& time_limit)
   {
     initializeSearchData(current_state, search_data);
     return aStarSearch(search_data, is_goal_, for_each_successor_, compute_step_cost_,

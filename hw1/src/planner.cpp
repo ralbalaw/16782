@@ -14,18 +14,6 @@
 #include "planalg/search/heuristic/moving_target_grid_heuristic.hpp"
 #include "planalg/search/heuristic/moving_target_heuristic.hpp"
 
-#define GETMAPINDEX(X, Y, XSIZE, YSIZE) ((Y - 1) * XSIZE + (X - 1))
-
-#if !defined(MAX)
-#define MAX(A, B) ((A) > (B) ? (A) : (B))
-#endif
-
-#if !defined(MIN)
-#define MIN(A, B) ((A) < (B) ? (A) : (B))
-#endif
-
-#define NUMOFDIRS 8
-
 using planalg::search::LearningRealTimeAStar;
 using planalg::search::RealTimeAdaptiveAStar;
 using namespace planalg::search::heuristic;
@@ -33,8 +21,8 @@ using namespace utility;
 
 enum class PlannerAlgorithm
 {
-  RealTimeAdaptiveAStar,
-  LearningRealTimeAStar
+  kRealTimeAdaptiveAStar,
+  kLearningRealTimeAStar
 };
 
 template <PlannerAlgorithm algorithm>
@@ -82,7 +70,7 @@ auto initializePlanner(const State& start_state, int* map, int collision_thresh,
                                           compute_step_cost, compute_state_heuristic, start_state,
                                           x_size, y_size);
 
-  if constexpr (algorithm == PlannerAlgorithm::RealTimeAdaptiveAStar)
+  if constexpr (algorithm == PlannerAlgorithm::kRealTimeAdaptiveAStar)
   {
     return RealTimeAdaptiveAStar<State, decltype(for_each_successor), decltype(compute_step_cost),
                                  decltype(is_goal)>{
@@ -110,7 +98,7 @@ void planner(int* map, int collision_thresh, int x_size, int y_size, int robotpo
   };
 
   static double heuristic_weight = 1.0;
-  static auto planning_algorithm = initializePlanner<PlannerAlgorithm::RealTimeAdaptiveAStar>(
+  static auto planning_algorithm = initializePlanner<PlannerAlgorithm::kRealTimeAdaptiveAStar>(
       State{ robotposeX, robotposeY, curr_time }, map, collision_thresh, x_size, y_size, action_set,
       target_steps, target_traj, heuristic_weight);
 

@@ -85,7 +85,8 @@ private:
       }
     }
 
-    backward_search_data_.open_queue = OpenQueue<State>(CompareOpenEntry<State>{}, std::move(seeds));
+    backward_search_data_.open_queue =
+        OpenQueue<State>(CompareOpenEntry<State>{}, std::move(seeds));
   }
 
   void runBackwardSearch(const TimeLimit& time_limit)
@@ -105,8 +106,7 @@ private:
       return this->computeStepCost()(predecessor, state);
     };
 
-    dijkstraSearch(backward_search_data_, is_goal, predecessor_callback, backward_cost,
-                   time_limit);
+    dijkstraSearch(backward_search_data_, is_goal, predecessor_callback, backward_cost, time_limit);
   }
 
   void applyHeuristicUpdates(const TimeLimit& time_limit)
@@ -128,6 +128,9 @@ private:
       this->heuristicManager()->updateHeuristicValue(state, h);
     }
   }
+
+  void performAdditionalLearning(const State& current_state, const TimeLimit& time_limit) override
+  { this->heuristicManager()->learn(current_state, time_limit); }
 
   SearchData<State> backward_search_data_;
   ForEachPredecessor for_each_predecessor_;

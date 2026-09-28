@@ -19,7 +19,7 @@ public:
   bool expired() const
   { return Clock::now() >= deadline_; }
 
-  TimeLimit portion(int numerator, int denominator) const
+  TimeLimit portion(double fraction) const
   {
     if (deadline_ == Clock::time_point::max())
     {
@@ -28,7 +28,9 @@ public:
 
     const auto now = Clock::now();
     const auto remaining = deadline_ > now ? deadline_ - now : Clock::duration::zero();
-    return TimeLimit{ now + remaining * numerator / denominator };
+    const auto portion = std::chrono::duration_cast<Clock::duration>(remaining * fraction);
+
+    return TimeLimit{ now + portion };
   }
 
   auto stopCondition() const
