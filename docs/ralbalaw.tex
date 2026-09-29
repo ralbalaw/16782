@@ -1,5 +1,4 @@
 % !TeX root = ralbalaw.tex
-% !TeX program = xelatex
 
 \documentclass[11pt]{article}
 
@@ -8,6 +7,7 @@
 \usepackage{fontspec}
 \usepackage{hyperref}
 \usepackage{enumitem}
+\usepackage{listings}
 \usepackage{microtype}
 \usepackage{titlesec}
 
@@ -26,6 +26,19 @@
   {\large\bfseries}{\thesubsection}{0.75em}{}
 \titlespacing*{\section}{0pt}{2.2em}{0.7em}
 \titlespacing*{\subsection}{0pt}{1.5em}{0.5em}
+
+\lstdefinestyle{pseudocode}{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    breaklines=true,
+    mathescape=true,
+    keywordstyle=\bfseries,
+    morekeywords={procedure,if,then,else,for,each,while,do,return,continue,end}
+}
+\renewcommand{\lstlistingname}{Algorithm}
 
 \hypersetup{
 	colorlinks=true,
@@ -66,30 +79,115 @@ The environment is represented as an 8-connected grid graph with valid cells \(V
 The known target trajectory is \(Q=(q_0,q_1,\ldots,q_T)\), where \(q_\tau=(x_\tau,y_\tau)\) is the target position at time \(\tau\) and \(T\) is the final time step. An interception occurs when the robot reaches \(q_\tau\) at the same time \(\tau\). The objective is to find a valid interception path \(\pi=(p_t,\ldots,p_\tau)\) that minimizes
 
 \[
-J(\pi)=\sum_{k=t}^{\tau-1}c(p_k,p_{k+1}),
-\qquad p_\tau=q_\tau.
+  J(\pi)=\sum_{k=t}^{\tau-1}c(p_k,p_{k+1}),
+  \qquad p_\tau=q_\tau.
 \]
 
 For convenience, let \(\mathcal{Q}=\{q_\tau\mid 0\leq\tau\leq T\}\) denote the set of all cells visited by the target.
 
 \subsection{Planning Algorithms}
-In this problem, the target is moving in real time and the robot must catch it before it reaches the end of its trajectory. Therefor, a full A* with a consistent heuristic or Dijkstra search is impractical, unless the environment was small enough that the full search would finish before the target takes it's first step. However this is not the cause in this problem. 
+In this problem, the target moves in real time, and the robot must intercept it before the target reaches the end of its trajectory. In principle, a full A* or Dijkstra search could solve the complete 3D planning problem. In practice, however, such a search requires significant computation and might not finish within the available planning time. The size of the environment and the length of the target trajectory make this approach impractical here.
 
-Some Real-Time planning algorithms solve this by doing a bounded A* search from the robot's current state at each time step to decide on the next action the robot should take and instead of throwing the entire search away they do a learning step in which they make the heuristics more informed for future searches. such algorithms which was implemented in this work is Learning Real-Time A* (LRTA*) and Real-Time Adaptive A* (RTAA*).
+Real-time heuristic search addresses this limitation by interleaving planning and execution. Some real-time algorithms, such as those considered in this work, operate as follows: at each time step, the planner performs a bounded A* search from the robot's current state, selects the next action, and then uses the local search results to improve the heuristic for future searches rather than discarding all of the information.
 
-The two algorithms differ in the learning step: LRTA* updates the heuristic by dynamic programming(in this work backward dijkstra), while RTAA* by a linear pass.
+In this work, we consider the following real-time heuristic search algorithms:
 
-LRTA* makes the heuristic more informed but it takes more time per learning step compared to RTAA*, which performs a simpler linear update.
+\begin{itemize}
+  \item Local Search Space LRTA* (LSS-LRTA*) \cite{koenig2009lsslrta}.
+  \item Real-Time Adaptive A* (RTAA*) \cite{koenig2006rtaa}.
+\end{itemize}
 
-Below is the pseudocode for the two algorithms used in this work: LRTA* and RTAA*.
+Let \(C\) be the set of closed states by the bounded A* search, let \(O\) be the set of open states in that local search space but not closed. The algorithms differ primarily in their learning step:
 
+\begin{itemize}
+  \item \textbf{LSS-LRTA*.}
+        LSS-LRTA* performs a dynamic-programming update over the local search space. In this implementation, a backward Dijkstra search is used. For every expanded state \(s\in C\), the update is
+        \[
+          h_{\mathrm{new}}(s)
+          =
+          \min_{u\in O}
+          \left\{
+          d_C(s,u)+h(u)
+          \right\},
+        \]
+        This update produces more informed heuristic values, but requires a backward shortest-path computation over the local search space.
+
+  \item \textbf{RTAA*.}
+        RTAA* first computes the minimum open \(f\)-value
+        \[
+          f_{\min}
+          =
+          \min_{u\in O}
+          \left\{
+          g(u)+h(u)
+          \right\}.
+        \]
+        It then updates every expanded state using
+        \[
+          h_{\mathrm{new}}(s)=f_{\min}-g(s),
+          \qquad s\in C.
+        \]
+        This update requires only a linear pass over the expanded states. It is therefore faster than the LSS-LRTA* learning step, although its heuristic updates can be less informed.
+\end{itemize}
+
+Below is the pseudocode for the two algorithms used in this work: LSS-LRTA* and RTAA*.
+
+\begin{lstlisting}[style=pseudocode,caption={One RTAA* planning step},label={alg:rtaa}]
+procedure RTAA_STEP(s_current, h, time_limit, max_expansions)
+    (path, OPEN, CLOSED, g, parent) <-
+        BOUNDED_A_STAR(s_current, h, time_limit, max_expansions)
+
+    if OPEN is not empty then
+        s_min <- TOP(OPEN).priority
+    else 
+        s_min is LAST(path)
+
+    f_min <- s.f
+    for each s in CLOSED do
+        h(s) <- f_min - g(s)
+    end for
+
+    return path[2]
+end procedure
+\end{lstlisting}
+
+\begin{lstlisting}[style=pseudocode,caption={One LSS-LRTA* planning step},label={alg:lss-lrta}]
+procedure LSS_LRTA_STEP(s_current, h, deadline,
+                        max_expansions)
+
+    (path, OPEN, CLOSED, g, parent) <-
+        BOUNDED_A_STAR(s_current, h, deadline)
+
+    learning_step(OPEN, h, deadline)
+
+    return path[2]
+end procedure
+
+procedure learning_step(OPEN, h, deadline)
+    BACKWARD_OPEN <- empty min-priority queue
+
+    for each u in OPEN
+        PUSH(BACKWARD_OPEN, priority = h(u), state = u)
+    end for
+
+    (closed, g) = dijkstra(BACKWARD_OPEN, deadline)
+
+    for each s in CLOSED do
+        if s is in g then
+            h(s) <- g(s)
+        else
+            h(s) <- $\infty$
+        end if
+    end for
+
+\end{lstlisting}
 
 \subsection{Heuristic}
 The heuristic combines three components:
 \begin{enumerate}
-    \item \textbf{Earliest interception:} Estimates the earliest possible interception using Chebyshev distance.
-    \item \textbf{Departure feasibility:} Checks whether interception is still possible before the trajectory ends.
-    \item \textbf{Spatial cost:} Estimates the minimum cost to the nearest target position while accounting for obstacles and traversal costs.
+  \item \textbf{Earliest interception:} Estimates the earliest possible interception using Chebyshev distance.
+  \item \textbf{Departure feasibility:} Checks whether interception is still possible before the trajectory ends.
+  \item \textbf{Spatial cost:} Estimates the minimum cost to the nearest target position while accounting for obstacles and traversal costs.
 \end{enumerate}
 
 
@@ -97,23 +195,23 @@ The heuristic combines three components:
 The earliest-interception heuristic gives the exact number of time steps needed to reach the target in a relaxed 3D space with no obstacles and a uniform traversal cost of 1. The Chebyshev distance to a target position is
 
 \[
-d_\infty\!\left((x,y),(x_\tau,y_\tau)\right)
-=
-\max\left(|x-x_\tau|,\;|y-y_\tau|\right).
+  d_\infty\!\left((x,y),(x_\tau,y_\tau)\right)
+  =
+  \max\left(|x-x_\tau|,\;|y-y_\tau|\right).
 \]
 
 The heuristic is then
 
 \[
-h_{\mathrm{EI}}(s)
-=
-\min_{t \leq \tau \leq T}
-\left\{
-\tau-t
-\;\middle|\;
-\tau-t \geq
-d_\infty\!\left((x,y),(x_\tau,y_\tau)\right)
-\right\}.
+  h_{\mathrm{EI}}(s)
+  =
+  \min_{t \leq \tau \leq T}
+  \left\{
+  \tau-t
+  \;\middle|\;
+  \tau-t \geq
+  d_\infty\!\left((x,y),(x_\tau,y_\tau)\right)
+  \right\}.
 \]
 
 If no time step satisfies the condition, the heuristic returns \(\infty\).
@@ -127,64 +225,64 @@ This is a state feasibility check rather than a cost-to-go estimate. It determin
 
 Let \(d(p,q_\tau)\) be the minimum number of valid moves from \(p\) to \(q_\tau\) while accounting for obstacles. Since each move takes one time step and the robot can wait, interception at time \(\tau\) is possible when
 \[
-t\leq \tau-d(p,q_\tau).
+  t\leq \tau-d(p,q_\tau).
 \]
 The latest feasible departure time from \(p\) is therefore
 \[
-L(p)=\max_{0\leq \tau\leq T}
-\left\{\tau-d(p,q_\tau)\right\},
+  L(p)=\max_{0\leq \tau\leq T}
+  \left\{\tau-d(p,q_\tau)\right\},
 \]
 A state is infeasible when \(t>L(p)\).
 
 This objective can be rewritten as a minimization by defining \(D(p)=T-L(p)\):
 
 \[
-D(p)=T-L(p)
-=\min_{0\leq \tau\leq T}
-\left\{(T-\tau)+d(p,q_\tau)\right\}.
+  D(p)=T-L(p)
+  =\min_{0\leq \tau\leq T}
+  \left\{(T-\tau)+d(p,q_\tau)\right\}.
 \]
 
 This can be computed using a backward multi-source Dijkstra search over the 2D grid. Each target position \(q_\tau\) is initialized with \(T-\tau\), and each reverse move costs 1. Using the Dijkstra cost \(g\), \(D(p)\) is evaluated during the search as
 
 \[
-D(p)=
-\begin{cases}
-g(p), & p\in\mathrm{CLOSED},\\
-\displaystyle\min_{u\in\mathrm{OPEN}}g(u),
-    & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}\neq\emptyset,\\
-\infty, & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}=\emptyset.
-\end{cases}
+  D(p)=
+  \begin{cases}
+    g(p),   & p\in\mathrm{CLOSED},                                 \\
+    \displaystyle\min_{u\in\mathrm{OPEN}}g(u),
+            & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}\neq\emptyset, \\
+    \infty, & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}=\emptyset.
+  \end{cases}
 \]
 
 The feasibility value is then
 \[
-h_{\mathrm{DF}}(s)=
-\begin{cases}
-\infty, & D(p)>T-t,\\
-0, & \text{otherwise}.
-\end{cases}
+  h_{\mathrm{DF}}(s)=
+  \begin{cases}
+    \infty, & D(p)>T-t,         \\
+    0,      & \text{otherwise}.
+  \end{cases}
 \]
 
 \subsubsection{Spatial Cost}
 The spatial-cost heuristic gives the exact cost of reaching the lowest-cost target cell while accounting for obstacles and traversal costs in the relaxed 2D space \((x,y)\). For position \(p\), the heuristic is
 
 \[
-h_{\mathrm{SC}}(p)
-=
-\min_{\substack{\pi=(p_0,\ldots,p_k)\\p_0=p,\;p_k\in\mathcal{Q}}}
-\sum_{i=0}^{k-1} c(p_i,p_{i+1}).
+  h_{\mathrm{SC}}(p)
+  =
+  \min_{\substack{\pi=(p_0,\ldots,p_k)\\p_0=p,\;p_k\in\mathcal{Q}}}
+  \sum_{i=0}^{k-1} c(p_i,p_{i+1}).
 \]
 
 Since the time dimension is ignored, this value is a consistent lower bound on the actual cost in the full 3D space. It is computed using a backward multi-source Dijkstra search initialized with every cell in \(\mathcal{Q}\). Using the Dijkstra cost \(g\), the heuristic is then defined as
 
 \[
-h_{\mathrm{SC}}(p)=
-\begin{cases}
-g(p), & p\in\mathrm{CLOSED},\\
-\displaystyle\min_{u\in\mathrm{OPEN}}g(u),
-    & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}\neq\emptyset,\\
-\infty, & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}=\emptyset.
-\end{cases}
+  h_{\mathrm{SC}}(p)=
+  \begin{cases}
+    g(p),   & p\in\mathrm{CLOSED},                                 \\
+    \displaystyle\min_{u\in\mathrm{OPEN}}g(u),
+            & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}\neq\emptyset, \\
+    \infty, & p\notin\mathrm{CLOSED},\;\mathrm{OPEN}=\emptyset.
+  \end{cases}
 \]
 
 At any fixed stage of the search, this definition is consistent.
@@ -192,14 +290,208 @@ At any fixed stage of the search, this definition is consistent.
 \subsubsection{Heuristic Evaluation}
 The overall heuristic used is a the maximum of the three consistent heuristics defined above as follows:
 \[
-h(s) = \max\{h_{\mathrm{DF}}(s), h_{\mathrm{SC}}(p), h_{\mathrm{EI}}(s)\}.
+  h(s) = \max\{h_{\mathrm{DF}}(s), h_{\mathrm{SC}}(p), h_{\mathrm{EI}}(s)\}.
 \]
 This overall heuristic remains consistent as it is the maximum of consistent heuristics.
+
+\section{Implementation Details}
+
+\subsection{Data Structures}
+
+The A* and Dijkstra search algorithms are implemented using the following data structures:
+
+\begin{itemize}
+  \item \textbf{OPEN:}
+        \begin{itemize}
+          \item OPEN is implemented as a min-heap.
+          \item Insertion and removal have \(O(\log n)\) complexity.
+          \item Accessing the minimum element (the top element) has \(O(1)\) complexity.
+          \item The C++ Standard Library \texttt{std::priority\_queue} implementation is used.
+        \end{itemize}
+
+  \item \textbf{CLOSED:}
+        \begin{itemize}
+          \item CLOSED is stored as a hash table.
+          \item Insertion, deletion, and membership checking have
+                \(O(1)_a\) complexity.
+          \item The C++ Standard Library \texttt{std::unordered\_set} implementation is used.
+        \end{itemize}
+
+  \item \textbf{Parent Pointers:}
+        \begin{itemize}
+          \item Implemented as a hash table.
+          \item If a lower-cost parent to a state is found, it replaces the existing parent.
+          \item Lookup, insertion, and update operations have
+                \(O(1)_a\) complexity.
+          \item The C++ Standard Library \texttt{std::unordered\_map} implementation is used.
+        \end{itemize}
+
+  \item \textbf{Costs (\(g\)):}
+        \begin{itemize}
+          \item Implemented as a hash table.
+          \item If a lower cost is found for a state, it replaces the existing
+                value.
+          \item Lookup, insertion, and update operations have
+                \(O(1)_a\) complexity.
+          \item The C++ Standard Library \texttt{std::unordered\_map} implementation is used.
+        \end{itemize}
+
+  \item \textbf{States:}
+        \begin{itemize}
+          \item A 3D struct is used to represent the state, containing the x, y, and t coordinates.
+          \item A custom hash function is defined for the struct so it can be used efficiently with hash tables.
+        \end{itemize}
+\end{itemize}
+
+\subsection{Search Algorithms}
+
+The A* and Dijkstra search algorithms use the data structures described above. Duplicate entries are allowed in OPEN to avoid searching for an existing entry and updating its priority whenever a lower-cost path to the same state is found. The priority is \(f\) for A* and \(g\) for Dijkstra. Although OPEN may contain duplicate entries, CLOSED ensures that each state is expanded at most once; subsequent duplicates are discarded. For A*, this behavior requires a consistent heuristic, rather than one that is merely admissible.
+
+An optimal path can be constructed by traversing the parent pointers from any expanded state to a start state.
+
+\subsection{Departure Feasibility and Spatial-Cost Learning}
+
+The learning process consists of two backward Dijkstra searches: one for
+departure feasibility and another for spatial cost.
+
+\begin{itemize}
+  \item \textbf{Departure feasibility learning:}
+        \begin{itemize}
+          \item Departure feasibility is learned first because knowing which
+                states are infeasible is more useful than improving their spatial-cost
+                estimates.
+
+          \item Spatial-cost learning starts only after departure-feasibility
+                learning has finished.
+
+          \item Once departure feasibility is fully learned, the planner can
+                avoid moves from which the target can no longer be reached. This makes
+                the algorithm complete with respect to finding a feasible interception.
+
+          \item A possible source of incompleteness is the robot taking actions
+                before departure feasibility has been fully learned.
+
+          \item When the minimum cost in OPEN exceeds the remaining time
+                \(T-t\), all states remaining in OPEN, as well as the unexplored
+                states, are infeasible. Departure-feasibility learning can then stop,
+                since those states will also remain infeasible at later time steps.
+        \end{itemize}
+
+  \item \textbf{Spatial-cost learning:}
+        \begin{itemize}
+          \item Spatial-cost learning begins after departure-feasibility learning
+                has been completed.
+
+          \item It improves the cost estimates for reaching the target positions
+                while accounting for obstacles and traversal costs.
+
+          \item The spatial-cost search continues incrementally whenever
+                planning time remains.
+        \end{itemize}
+\end{itemize}
+
+\subsection{Planning Algorithm}
+The two real time planning algorithms in this work integrate both the heuristics above with their learning processes along with the algoirhtms itself heuristic learning step. Both algorithms are implemented with the same underlying framework and steps and they differ in how their learning steps alone.
+
+the next part explains the implementation of the full planning algorithms with the integration of the heuristics describes above.
+
+\subsubsection{RTAA}
+\begin{lstlisting}[
+    style=pseudocode,
+    caption={One RTAA* Planning Step},
+    label={alg:rtaa}
+]
+procedure RTAA(s_current, H, deadline, max_expansions)
+
+if IS_GOAL(s_current) then
+    return s_current
+end if
+
+learning_deadline <- CURRENT_TIME()
+                         + 0.75 * REMAINING_TIME(deadline)
+REFINE_HEURISTIC(s_current, H, learning_deadline)
+
+result <- BOUNDED_A_STAR(
+    s_current,
+    H.EVALUATE,
+    deadline,
+    max_expansions
+)
+
+RTAA_UPDATE(result, H, deadline)
+
+s_next <- SELECT_NEXT_STATE(result, s_current)
+
+if not EXPIRED(deadline) then
+    REFINE_HEURISTIC(s_current, H, deadline)
+end if
+
+return s_next
+end procedure
+
+
+procedure REFINE_HEURISTIC(s_current, H, deadline)
+
+if H.FINISHED_LEARNING(s_current)
+   or EXPIRED(deadline) then
+    return
+end if
+
+if H.NEEDS_DEPARTURE_LEARNING(s_current) then
+    H.CONTINUE_DEPARTURE_LEARNING(deadline)
+
+    if EXPIRED(deadline) then
+        return
+    end if
+end if
+
+if H.NEEDS_SPATIAL_LEARNING() then
+    H.CONTINUE_SPATIAL_LEARNING(deadline)
+end if
+
+end procedure
+
+
+function H.EVALUATE(s)
+
+if H.DEPARTURE_COST(s) = infinity then
+    return infinity
+end if
+
+h_spatial <- H.SPATIAL_COST(s)
+
+if h_spatial = infinity then
+    return infinity
+end if
+
+h_adaptive <- H.ADAPTIVE_LOWER_BOUND(s)
+
+return max(h_spatial, h_adaptive)
+end function
+
+
+procedure RTAA_UPDATE(result, H, deadline)
+
+f_best <- BEST_LOOKAHEAD_VALUE(result)
+
+for each s in result.CLOSED do
+    if EXPIRED(deadline) then
+        return
+    end if
+
+    H.UPDATE(s, f_best - result.g(s))
+end for
+
+end procedure
+\end{lstlisting}
 
 \section{Results}
 
 \section{Conclusion}
 
-\section{}
+\clearpage
+\addcontentsline{toc}{section}{References}
+\bibliographystyle{plain}
+\bibliography{references}
 
 \end{document}
