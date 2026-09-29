@@ -5,11 +5,11 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath}
 \usepackage{fontspec}
-\usepackage{hyperref}
 \usepackage{enumitem}
-\usepackage{listings}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 \usepackage{microtype}
 \usepackage{titlesec}
+\usepackage{hyperref}
 
 \setmainfont{Open Sans}
 \setsansfont{Open Sans}
@@ -26,19 +26,6 @@
   {\large\bfseries}{\thesubsection}{0.75em}{}
 \titlespacing*{\section}{0pt}{2.2em}{0.7em}
 \titlespacing*{\subsection}{0pt}{1.5em}{0.5em}
-
-\lstdefinestyle{pseudocode}{
-    basicstyle=\ttfamily\small,
-    frame=single,
-    columns=fullflexible,
-    keepspaces=true,
-    showstringspaces=false,
-    breaklines=true,
-    mathescape=true,
-    keywordstyle=\bfseries,
-    morekeywords={procedure,if,then,else,for,each,while,do,return,continue,end}
-}
-\renewcommand{\lstlistingname}{Algorithm}
 
 \hypersetup{
 	colorlinks=true,
@@ -130,57 +117,10 @@ Let \(C\) be the set of closed states by the bounded A* search, let \(O\) be the
         This update requires only a linear pass over the expanded states. It is therefore faster than the LSS-LRTA* learning step, although its heuristic updates can be less informed.
 \end{itemize}
 
-Below is the pseudocode for the two algorithms used in this work: LSS-LRTA* and RTAA*.
-
-\begin{lstlisting}[style=pseudocode,caption={One RTAA* planning step},label={alg:rtaa}]
-procedure RTAA_STEP(s_current, h, time_limit, max_expansions)
-    (path, OPEN, CLOSED, g, parent) <-
-        BOUNDED_A_STAR(s_current, h, time_limit, max_expansions)
-
-    if OPEN is not empty then
-        s_min <- TOP(OPEN).priority
-    else 
-        s_min is LAST(path)
-
-    f_min <- s.f
-    for each s in CLOSED do
-        h(s) <- f_min - g(s)
-    end for
-
-    return path[2]
-end procedure
-\end{lstlisting}
-
-\begin{lstlisting}[style=pseudocode,caption={One LSS-LRTA* planning step},label={alg:lss-lrta}]
-procedure LSS_LRTA_STEP(s_current, h, deadline,
-                        max_expansions)
-
-    (path, OPEN, CLOSED, g, parent) <-
-        BOUNDED_A_STAR(s_current, h, deadline)
-
-    learning_step(OPEN, h, deadline)
-
-    return path[2]
-end procedure
-
-procedure learning_step(OPEN, h, deadline)
-    BACKWARD_OPEN <- empty min-priority queue
-
-    for each u in OPEN
-        PUSH(BACKWARD_OPEN, priority = h(u), state = u)
-    end for
-
-    (closed, g) = dijkstra(BACKWARD_OPEN, deadline)
-
-    for each s in CLOSED do
-        if s is in g then
-            h(s) <- g(s)
-        else
-            h(s) <- $\infty$
-        end if
-    end for
-
-\end{lstlisting}
+Both algorithms use the same bounded-lookahead planning framework. They differ only
+in the local heuristic update applied after the lookahead search. The complete
+framework and the two update procedures are presented in
+Section~\ref{sec:real-time-search-framework}.
 
 \subsection{Heuristic}
 The heuristic combines three components:
@@ -391,99 +331,117 @@ departure feasibility and another for spatial cost.
 \end{itemize}
 
 \subsection{Planning Algorithm}
-The two real time planning algorithms in this work integrate both the heuristics above with their learning processes along with the algoirhtms itself heuristic learning step. Both algorithms are implemented with the same underlying framework and steps and they differ in how their learning steps alone.
+\label{sec:real-time-search-framework}
 
-the next part explains the implementation of the full planning algorithms with the integration of the heuristics describes above.
+The two real-time planning algorithms use the same planning framework. They differ in their local update procedure \(\mathcal{U}\): RTAA* supplies \textsf{RTAA-Update}, while
+LSS-LRTA* supplies \textsf{LSS-LRTA-Update}.
 
-\subsubsection{RTAA}
-\begin{lstlisting}[
-    style=pseudocode,
-    caption={One RTAA* Planning Step},
-    label={alg:rtaa}
-]
-procedure RTAA(s_current, H, deadline, max_expansions)
+\begin{algorithm}[H]
+  \caption{Real-time heuristic search planning}
+  \label{alg:real-time-heuristic-search}
+  \KwIn{current state \(s_{\mathrm{current}}\), heuristic \(H\), time limit \(\Delta\),
+    expansion bound \(N\), local update procedure \(\mathcal{U}\)}
+  \If{\(\FuncSty{IsGoal}(s_{\mathrm{current}})\)}{
+    \Return\;
+  }
+  \(D \gets \FuncSty{CurrentTime}() + \Delta\)\;
+  \(D_{\mathrm{learn}} \gets \FuncSty{CurrentTime}()
+  + 0.75 \cdot \FuncSty{RemainingTime}(D)\)\;
+  \(\FuncSty{RefineHeuristic}(s_{\mathrm{current}},H,D_{\mathrm{learn}})\)\;
+  \(R \gets
+  \FuncSty{BoundedAStar}(s_{\mathrm{current}},H.\FuncSty{Evaluate},D,N)\)\;
+  \(\mathcal{U}(R,H,D)\)\;
+  \(s_{\mathrm{next}} \gets
+  \FuncSty{SelectNextState}(R,s_{\mathrm{current}})\)\;
+  \If{\(\neg\FuncSty{Expired}(D)\)}{
+    \(\FuncSty{RefineHeuristic}(s_{\mathrm{current}},H,D)\)\;
+  }
+  \(\FuncSty{Execute}(s_{\mathrm{next}})\)\;
+  \(\FuncSty{RealTimeHeuristicSearch}(
+    s_{\mathrm{next}},H,\Delta,N,\mathcal{U})\)\;
+\end{algorithm}
 
-if IS_GOAL(s_current) then
-    return s_current
-end if
+\subsubsection{Heuristic Refinement}
 
-learning_deadline <- CURRENT_TIME()
-                         + 0.75 * REMAINING_TIME(deadline)
-REFINE_HEURISTIC(s_current, H, learning_deadline)
+Heuristic refinement is independent of the selected real-time search algorithm.
+Departure-feasibility learning is completed first; spatial-cost learning then
+uses any remaining time.
 
-result <- BOUNDED_A_STAR(
-    s_current,
-    H.EVALUATE,
-    deadline,
-    max_expansions
-)
+\begin{algorithm}[H]
+  \caption{Incremental heuristic refinement}
+  \label{alg:refine-heuristic}
+  \KwIn{current state \(s_{\mathrm{current}}\), heuristic \(H\), deadline \(D\)}
+  \If{\(H.\FuncSty{FinishedLearning}(s_{\mathrm{current}})
+    \lor \FuncSty{Expired}(D)\)}{
+    \Return\;
+  }
+  \If{\(H.\FuncSty{NeedsDepartureLearning}(s_{\mathrm{current}})\)}{
+    \(H.\FuncSty{ContinueDepartureLearning}(D)\)\;
+    \If{\(\FuncSty{Expired}(D)\)}{
+      \Return\;
+    }
+  }
+  \If{\(H.\FuncSty{NeedsSpatialLearning}()\)}{
+    \(H.\FuncSty{ContinueSpatialLearning}(D)\)\;
+  }
+\end{algorithm}
 
-RTAA_UPDATE(result, H, deadline)
+\begin{algorithm}[H]
+  \caption{Heuristic evaluation}
+  \label{alg:evaluate-heuristic}
+  \KwIn{state \(s\), heuristic \(H\)}
+  \KwOut{heuristic value \(h(s)\)}
+  \If{\(H.\FuncSty{DepartureCost}(s)=\infty\)}{
+    \Return{\(\infty\)}\;
+  }
+  \(h_{\mathrm{spatial}} \gets H.\FuncSty{SpatialCost}(s)\)\;
+  \If{\(h_{\mathrm{spatial}}=\infty\)}{
+    \Return{\(\infty\)}\;
+  }
+  \(h_{\mathrm{adaptive}} \gets H.\FuncSty{AdaptiveLowerBound}(s)\)\;
+  \Return{\(\max\{h_{\mathrm{spatial}},h_{\mathrm{adaptive}}\}\)}\;
+\end{algorithm}
 
-s_next <- SELECT_NEXT_STATE(result, s_current)
+\subsubsection{Local Heuristic Updates}
 
-if not EXPIRED(deadline) then
-    REFINE_HEURISTIC(s_current, H, deadline)
-end if
+RTAA performs a direct linear update to all the closed states.
 
-return s_next
-end procedure
+\begin{algorithm}[H]
+  \caption{RTAA* local heuristic update}
+  \label{alg:rtaa-update}
+  \KwIn{lookahead result \(R\), heuristic \(H\), deadline \(D\)}
+  \(f_{\mathrm{best}} \gets \FuncSty{BestLookaheadValue}(R)\)\;
+  \ForEach{\(s \in R.\mathrm{CLOSED}\)}{
+  \If{\(\FuncSty{Expired}(D)\)}{
+    \Return\;
+  }
+  \(H.\FuncSty{Update}(s,f_{\mathrm{best}}-R.g(s))\)\;
+  }
+\end{algorithm}
 
+LSS-LRTA* instead propagates heuristic values backward from OPEN to update the expanded states.
 
-procedure REFINE_HEURISTIC(s_current, H, deadline)
-
-if H.FINISHED_LEARNING(s_current)
-   or EXPIRED(deadline) then
-    return
-end if
-
-if H.NEEDS_DEPARTURE_LEARNING(s_current) then
-    H.CONTINUE_DEPARTURE_LEARNING(deadline)
-
-    if EXPIRED(deadline) then
-        return
-    end if
-end if
-
-if H.NEEDS_SPATIAL_LEARNING() then
-    H.CONTINUE_SPATIAL_LEARNING(deadline)
-end if
-
-end procedure
-
-
-function H.EVALUATE(s)
-
-if H.DEPARTURE_COST(s) = infinity then
-    return infinity
-end if
-
-h_spatial <- H.SPATIAL_COST(s)
-
-if h_spatial = infinity then
-    return infinity
-end if
-
-h_adaptive <- H.ADAPTIVE_LOWER_BOUND(s)
-
-return max(h_spatial, h_adaptive)
-end function
-
-
-procedure RTAA_UPDATE(result, H, deadline)
-
-f_best <- BEST_LOOKAHEAD_VALUE(result)
-
-for each s in result.CLOSED do
-    if EXPIRED(deadline) then
-        return
-    end if
-
-    H.UPDATE(s, f_best - result.g(s))
-end for
-
-end procedure
-\end{lstlisting}
+\begin{algorithm}[H]
+  \caption{LSS-LRTA* local heuristic update}
+  \label{alg:lss-lrta-update}
+  \KwIn{lookahead result \(R\), heuristic \(H\), deadline \(D\)}
+  \(V \gets
+  \FuncSty{BackwardDijkstra}(R.\mathrm{OPEN},R.\mathrm{CLOSED},
+  H.\FuncSty{Evaluate},D)\)\;
+  \If{\(\FuncSty{Expired}(D)\)}{
+    \Return\;
+  }
+  \ForEach{\(s \in R.\mathrm{CLOSED}\)}{
+  \If{\(\FuncSty{Expired}(D)\)}{
+    \Return\;
+  }
+  \eIf{\(V(s)\) is defined}{
+    \(H.\FuncSty{Update}(s,V(s))\)\;
+    }{
+      \(H.\FuncSty{Update}(s,\infty)\)\;
+    }
+  }
+\end{algorithm}
 
 \section{Results}
 
