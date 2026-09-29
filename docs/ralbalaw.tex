@@ -41,6 +41,20 @@
 \begin{document}
 \maketitle
 
+\section*{Authorship and AI-Assistance Statement}
+\addcontentsline{toc}{section}{Authorship and AI-Assistance Statement}
+
+All project-specific ideas, and the original implementation
+were developed and written by the author. Established concepts and algorithms,
+including A*, Dijkstra's algorithm, LRTA, LSS-LRTA, and RTAA, were studied from and
+attributed to the cited literature. \emph{Artificial Intelligence: A Modern
+Approach}, fourth edition, was used extensively as a general reference for
+artificial-intelligence concepts and search methods \cite{russell2020aima}.
+
+Generative AI tools were used in a supporting role for debugging, LaTeX
+assistance, limited code corrections and limited modifications, and prose
+refinement. They were not used to originate the ideas, algorithmic design, or conclusions.
+
 \clearpage
 \tableofcontents
 
@@ -80,15 +94,15 @@ Real-time heuristic search addresses this limitation by interleaving planning an
 In this work, we consider the following real-time heuristic search algorithms:
 
 \begin{itemize}
-  \item Local Search Space LRTA* (LSS-LRTA*) \cite{koenig2009lsslrta}.
-  \item Real-Time Adaptive A* (RTAA*) \cite{koenig2006rtaa}.
+  \item Local Search Space LRTA (LSS-LRTA) \cite{koenig2009lsslrta}\cite{korf1990realtime}.
+  \item Real-Time Adaptive A (RTAA) \cite{koenig2006rtaa}.
 \end{itemize}
 
 Let \(C\) be the set of closed states by the bounded A* search, let \(O\) be the set of open states in that local search space but not closed. The algorithms differ primarily in their learning step:
 
 \begin{itemize}
-  \item \textbf{LSS-LRTA*.}
-        LSS-LRTA* performs a dynamic-programming update over the local search space. In this implementation, a backward Dijkstra search is used. For every expanded state \(s\in C\), the update is
+  \item \textbf{LSS-LRTA.}
+        LSS-LRTA uses a dynamic-programming update over the local search space. In this implementation, a backward Dijkstra search is used. For every expanded state \(s\in C\), the update is
         \[
           h_{\mathrm{new}}(s)
           =
@@ -99,8 +113,8 @@ Let \(C\) be the set of closed states by the bounded A* search, let \(O\) be the
         \]
         This update produces more informed heuristic values, but requires a backward shortest-path computation over the local search space.
 
-  \item \textbf{RTAA*.}
-        RTAA* first computes the minimum open \(f\)-value
+  \item \textbf{RTAA.}
+        RTAA first computes the minimum open \(f\)-value
         \[
           f_{\min}
           =
@@ -114,7 +128,7 @@ Let \(C\) be the set of closed states by the bounded A* search, let \(O\) be the
           h_{\mathrm{new}}(s)=f_{\min}-g(s),
           \qquad s\in C.
         \]
-        This update requires only a linear pass over the expanded states. It is therefore faster than the LSS-LRTA* learning step, although its heuristic updates can be less informed.
+        This update requires only a linear pass over the expanded states. It is therefore faster than the LSS-LRTA learning step, although its heuristic updates can be less informed.
 \end{itemize}
 
 Both algorithms use the same bounded-lookahead planning framework. They differ only
@@ -333,8 +347,8 @@ departure feasibility and another for spatial cost.
 \subsection{Planning Algorithm}
 \label{sec:real-time-search-framework}
 
-The two real-time planning algorithms use the same planning framework. They differ in their local update procedure \(\mathcal{U}\): RTAA* supplies \textsf{RTAA-Update}, while
-LSS-LRTA* supplies \textsf{LSS-LRTA-Update}.
+The two real-time planning algorithms use the same planning framework. They differ in their local update procedure \(\mathcal{U}\): RTAA supplies \textsf{RTAA-Update}, while
+LSS-LRTA supplies \textsf{LSS-LRTA-Update}.
 
 \begin{algorithm}[H]
   \caption{Real-time heuristic search planning}
@@ -407,7 +421,7 @@ uses any remaining time.
 RTAA performs a direct linear update to all the closed states.
 
 \begin{algorithm}[H]
-  \caption{RTAA* local heuristic update}
+  \caption{RTAA local heuristic update}
   \label{alg:rtaa-update}
   \KwIn{lookahead result \(R\), heuristic \(H\), deadline \(D\)}
   \(f_{\mathrm{best}} \gets \FuncSty{BestLookaheadValue}(R)\)\;
@@ -419,10 +433,10 @@ RTAA performs a direct linear update to all the closed states.
   }
 \end{algorithm}
 
-LSS-LRTA* instead propagates heuristic values backward from OPEN to update the expanded states.
+LSS-LRTA instead propagates heuristic values backward from OPEN to update the expanded states.
 
 \begin{algorithm}[H]
-  \caption{LSS-LRTA* local heuristic update}
+  \caption{LSS-LRTA local heuristic update}
   \label{alg:lss-lrta-update}
   \KwIn{lookahead result \(R\), heuristic \(H\), deadline \(D\)}
   \(V \gets
