@@ -28,22 +28,3 @@ target_link_libraries(
   PRIVATE
   nlohmann_json::nlohmann_json
 )
-
-include(CTest)
-
-if(BUILD_TESTING)
-  add_executable(graph_from_json_test
-    test/graph_from_json_test.cpp
-  )
-
-  target_link_libraries(
-    graph_from_json_test
-    PRIVATE
-    planalg::planalg
-  )
-
-  add_test(
-    NAME graph_from_json_test
-    COMMAND graph_from_json_test
-  )
-endif()

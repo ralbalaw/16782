@@ -35,33 +35,28 @@
 }
 
 \title{16782 HW1}
-\author{}
-\date{}
+\author{Rashed Albalawi}
+\date{9/28/2026}
 
 \begin{document}
 \maketitle
 
 \section*{Authorship and AI-Assistance Statement}
-\addcontentsline{toc}{section}{Authorship and AI-Assistance Statement}
 
-All project-specific ideas, and the original implementation
-were developed and written by the author. Established concepts and algorithms,
-including A*, Dijkstra's algorithm, LRTA, LSS-LRTA, and RTAA, were studied from and
-attributed to the cited literature. \emph{Artificial Intelligence: A Modern
+All project-specific ideas, and implementation
+were developed and written by the author. \emph{Artificial Intelligence: A Modern
 Approach}, fourth edition, was used extensively as a general reference for
 artificial-intelligence concepts and search methods \cite{russell2020aima}.
 
+
+\section*{ AI-Assistance Statement}
 Generative AI tools were used in a supporting role for debugging, LaTeX
-assistance, limited code corrections and limited modifications, and prose
-refinement. They were not used to originate the ideas, algorithmic design, or conclusions.
+assistance, limited code modifications, and language refinement. They were not used to originate ideas.
 
 \clearpage
 \tableofcontents
 
 \clearpage
-\section{Introduction}
-In this homework, we explore real-time planning algorithms for 8 connected grid environments.
-
 \section{Problem}
 \subsection{Goal}
 A target moves one step at a time in an 8-connected grid environment. Its trajectory is known to the robot prior to the start of the planning process. The goal is to catch the target while accumulating as little cost as possible.
@@ -84,7 +79,9 @@ The known target trajectory is \(Q=(q_0,q_1,\ldots,q_T)\), where \(q_\tau=(x_\ta
   \qquad p_\tau=q_\tau.
 \]
 
-For convenience, let \(\mathcal{Q}=\{q_\tau\mid 0\leq\tau\leq T\}\) denote the set of all cells visited by the target.
+For convenience, let \(\mathcal{Q}=\{q_\tau\mid 0\leq\tau\leq T\}\) denote
+the set of all cells visited by the target. Let \(\mathcal{Q}_f\) denote the
+subset containing the feasible target cells.
 
 \subsection{Planning Algorithms}
 In this problem, the target moves in real time, and the robot must intercept it before the target reaches the end of its trajectory. In principle, a full A* or Dijkstra search could solve the complete 3D planning problem. In practice, however, such a search requires significant computation and might not finish within the available planning time. The size of the environment and the length of the target trajectory make this approach impractical here.
@@ -170,6 +167,12 @@ The heuristic is then
 
 If no time step satisfies the condition, the heuristic returns \(\infty\).
 
+At the initial state \(s_0\), the earliest-interception heuristic identifies the
+first target position that is feasible in the relaxed problem. Because
+feasibility remains true for all later target positions, the
+corresponding interception time sets the lower time bound for the states in
+\(\mathcal{Q}_f\).
+
 Since this is the exact cost-to-go for the relaxed problem, the heuristic is consistent and provides a lower bound on the cost of the original problem.
 
 A direct approach checks each future target position until the interception condition is met, taking \(O(N)\) time in the worst case for \(N\) remaining positions. However, since the target moves by at most one cell per time step, once the condition becomes true, it remains true for all later time steps. Therefore, binary search can find the earliest feasible interception time in \(O(\log N)\).
@@ -183,7 +186,7 @@ Let \(d(p,q_\tau)\) be the minimum number of valid moves from \(p\) to \(q_\tau\
 \]
 The latest feasible departure time from \(p\) is therefore
 \[
-  L(p)=\max_{0\leq \tau\leq T}
+  L(p)=\max_{q_\tau\in\mathcal{Q}_f}
   \left\{\tau-d(p,q_\tau)\right\},
 \]
 A state is infeasible when \(t>L(p)\).
@@ -192,11 +195,11 @@ This objective can be rewritten as a minimization by defining \(D(p)=T-L(p)\):
 
 \[
   D(p)=T-L(p)
-  =\min_{0\leq \tau\leq T}
+  =\min_{q_\tau\in\mathcal{Q}_f}
   \left\{(T-\tau)+d(p,q_\tau)\right\}.
 \]
 
-This can be computed using a backward multi-source Dijkstra search over the 2D grid. Each target position \(q_\tau\) is initialized with \(T-\tau\), and each reverse move costs 1. Using the Dijkstra cost \(g\), \(D(p)\) is evaluated during the search as
+This can be computed using a backward multi-source Dijkstra search over the 2D grid. Each target position \(q_\tau\in\mathcal{Q}_f\) is initialized with \(T-\tau\), and each reverse move costs 1. Using the Dijkstra cost \(g\), \(D(p)\) is evaluated during the search as
 
 \[
   D(p)=
@@ -218,16 +221,16 @@ The feasibility value is then
 \]
 
 \subsubsection{Spatial Cost}
-The spatial-cost heuristic gives the exact cost of reaching the lowest-cost target cell while accounting for obstacles and traversal costs in the relaxed 2D space \((x,y)\). For position \(p\), the heuristic is
+The spatial-cost heuristic gives the exact cost of reaching the lowest-cost feasible target cell while accounting for obstacles and traversal costs in the relaxed 2D space \((x,y)\). For position \(p\), the heuristic is
 
 \[
   h_{\mathrm{SC}}(p)
   =
-  \min_{\substack{\pi=(p_0,\ldots,p_k)\\p_0=p,\;p_k\in\mathcal{Q}}}
+  \min_{\substack{\pi=(p_0,\ldots,p_k)\\p_0=p,\;p_k\in\mathcal{Q}_f}}
   \sum_{i=0}^{k-1} c(p_i,p_{i+1}).
 \]
 
-Since the time dimension is ignored, this value is a consistent lower bound on the actual cost in the full 3D space. It is computed using a backward multi-source Dijkstra search initialized with every cell in \(\mathcal{Q}\). Using the Dijkstra cost \(g\), the heuristic is then defined as
+Since the time dimension is ignored, this value is a consistent lower bound on the actual cost in the full 3D space. It is computed using a backward multi-source Dijkstra search initialized with every cell in \(\mathcal{Q}_f\). Using the Dijkstra cost \(g\), the heuristic is then defined as
 
 \[
   h_{\mathrm{SC}}(p)=
@@ -306,7 +309,10 @@ An optimal path can be constructed by traversing the parent pointers from any ex
 \subsection{Departure Feasibility and Spatial-Cost Learning}
 
 The learning process consists of two backward Dijkstra searches: one for
-departure feasibility and another for spatial cost.
+departure feasibility and another for spatial cost. Both searches are
+initialized with \(\mathcal{Q}_f\), which is computed once during initialization
+using a single evaluation of the earliest-interception heuristic from the
+initial state.
 
 \begin{itemize}
   \item \textbf{Departure feasibility learning:}
@@ -343,6 +349,8 @@ departure feasibility and another for spatial cost.
                 planning time remains.
         \end{itemize}
 \end{itemize}
+
+
 
 \subsection{Planning Algorithm}
 \label{sec:real-time-search-framework}
@@ -458,8 +466,6 @@ LSS-LRTA instead propagates heuristic values backward from OPEN to update the ex
 \end{algorithm}
 
 \section{Results}
-
-\section{Conclusion}
 
 \clearpage
 \addcontentsline{toc}{section}{References}
