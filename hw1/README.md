@@ -10,7 +10,7 @@
 
 From root
 ```bash
-cmake --preset build
+cmake -B build
 cmake --build build
 ```
 
@@ -18,5 +18,5 @@ cmake --build build
 
 From root
 ```bash
-./build/hw1/run_test map9.
+./build/run_test map9.
 ```
