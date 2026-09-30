@@ -16,6 +16,4 @@ target_include_directories(run_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_definitions(run_test PRIVATE MAPS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/maps")
 target_compile_definitions(run_test PRIVATE OUTPUT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/output")
 
-target_link_libraries(run_test PRIVATE planalg::planalg)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

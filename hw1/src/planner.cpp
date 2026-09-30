@@ -105,7 +105,7 @@ void planner(int* map, int collision_thresh, int x_size, int y_size, int robotpo
   const State current_state{ robotposeX, robotposeY, curr_time };
 
   const State next_state =
-      planning_algorithm.planNextMove(current_state, std::chrono::milliseconds(950), 1000);
+      planning_algorithm.planNextMove(current_state, std::chrono::milliseconds(950), 100);
 
   action_ptr[0] = next_state.x;
   action_ptr[1] = next_state.y;
