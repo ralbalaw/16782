@@ -467,7 +467,15 @@ LSS-LRTA instead propagates heuristic values backward from OPEN to update the ex
   }
 \end{algorithm}
 
+\section{Completeness \& Optimality}
+The standard guarantees of RTAA and LSS-LRTA do not directly imply completeness in this problem because the robot executes each action immediately and cannot physically backtrack. A bounded lookahead search may therefore commit the robot to a state from which interception is no longer possible.
+
+Completeness from the robot’s current state at time \(t\) is guaranteed only if the departure-feasibility heuristic has been fully learned before the next action is selected. Once learned, this heuristic assigns an infinite value to every state from which the target cannot be intercepted within the remaining time. Consequently, regardless of the expansion limit, neither algorithm will select an infeasible successor while a feasible successor exists. If every available successor has an infinite heuristic value, then no feasible interception path remains. Otherwise, RTAA and LSS-LRTA select a finite-\(f\) successor, which is guaranteed to preserve feasibility.
+
+Without the departure heuristic, neither algorithm is complete under bounded lookahead: the robot may enter a state that appears promising locally but leads to an unavoidable dead end. Completeness would then require an expansion limit large enough to search the entire relevant state-time space, or at least enough to establish a feasible continuation before committing to an action. Moreover, bounded real-time search does not generally guarantee a globally optimal trajectory; larger expansion limits can improve solution quality but do not guarantee optimality unless the complete relevant search space is considered.
+
 \section{Results}
+The results of running the two algorithms under different expansion limits are shown below.
 \input{generated_results}
 
 \clearpage
