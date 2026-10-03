@@ -18,7 +18,7 @@ cmake --build build
 
 From root
 ```bash
-./build/run_test map9.
+./build/hw1/run_test map9.
 ```
 
 ## File Guide
